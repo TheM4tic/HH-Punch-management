@@ -43,8 +43,11 @@ service cloud.firestore {
     }
 
     // ── Project Config (logo URL, project name) ───────────────────────────
+    // Public read is intentional: config only contains the logo URL and
+    // project name. It is also used to detect first-time initialisation
+    // before any user account exists, so it must be readable without auth.
     match /config/{configId} {
-      allow read: if isAuth();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
