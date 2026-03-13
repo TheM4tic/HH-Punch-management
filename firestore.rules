@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: is the requester signed in?
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: is the requester an admin? (reads their Firestore profile)
+    function isAdmin() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper: is the requester's account marked active?
+    function isActive() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.active == true;
+    }
+
+    // ── Punch Items ─────────────────────────────────────────────────────────
+    match /items/{itemId} {
+      allow read: if isAuth() && isActive();
+      allow create: if isAuth() && isActive()
+        && request.resource.data.keys().hasAll(['id', 'room', 'desc1', 'status', 'photos', 'notes']);
+      allow update: if isAuth() && isActive();
+      allow delete: if isAdmin();
+    }
+
+    // ── User Profiles ────────────────────────────────────────────────────────
+    match /users/{userId} {
+      // Any authenticated user can read profiles (for display names, role checks)
+      allow read: if isAuth();
+      // Users can create their own profile; admins can create any profile
+      allow create: if (isAuth() && request.auth.uid == userId) || isAdmin();
+      // Users can update their own profile (except role); admins can update any field
+      allow update: if isAdmin() ||
+        (isAuth() && request.auth.uid == userId
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      // Only admins can delete profiles
+      allow delete: if isAdmin();
+    }
+
+    // ── Project Config (logo URL, project name) ───────────────────────────
+    match /config/{configId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Invites ──────────────────────────────────────────────────────────────
+    match /invites/{token} {
+      // Anyone can read an invite (needed to accept it before creating an account)
+      allow read: if true;
+      // Only admins can create invites
+      allow create: if isAdmin();
+      // Accept: only allow marking as accepted, nothing else
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accepted'])
+        && request.resource.data.accepted == true;
+      allow delete: if isAdmin();
+    }
+  }
+}
