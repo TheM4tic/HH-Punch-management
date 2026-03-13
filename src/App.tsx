@@ -32,7 +32,6 @@ import {
   deleteDoc,
   setDoc,
   getDoc,
-  getDocs,
   query,
   orderBy,
 } from "firebase/firestore";
@@ -2058,19 +2057,23 @@ export default function App() {
           setUserProfile({ uid: fbUser.uid, ...convertTimestamps(profileSnap.data()) } as UserProfile);
         } else {
           // No Firestore profile — check if this is the very first user
-          const usersSnap = await getDocs(collection(db, "users"));
-          if (usersSnap.empty) {
+          const configSnap2 = await getDoc(doc(db, "config", "project"));
+          if (!configSnap2.exists()) {
             setNeedsInit(true);
           }
         }
       } else {
         setUserProfile(null);
-        // Check if we need first-time init
+        // Check if we need first-time init.
+        // We read config/project (publicly readable) instead of the users
+        // collection, which is blocked for unauthenticated requests.
         try {
-          const usersSnap = await getDocs(collection(db, "users"));
-          setNeedsInit(usersSnap.empty);
+          const configSnap = await getDoc(doc(db, "config", "project"));
+          setNeedsInit(!configSnap.exists());
         } catch {
-          setNeedsInit(false);
+          // If rules block even config reads, assume init is needed so the
+          // user is never stuck on a blank login screen.
+          setNeedsInit(true);
         }
       }
       setAppLoading(false);
