@@ -2156,8 +2156,18 @@ export default function App() {
   // Guard: Firebase not configured
   if (!isFirebaseConfigured) return <MissingConfigScreen />;
 
-  // Guard: Pending invite
-  if (pendingInvite) return <AcceptInviteScreen token={pendingInvite} onDone={() => setPendingInvite(null)} />;
+  // Guard: Pending invite — only show if NOT already logged in.
+  // If an admin clicks their own invite link to test/copy it, we simply
+  // clear the token and keep them on the normal app instead of booting
+  // them to the AcceptInviteScreen.
+  if (pendingInvite && !appLoading) {
+    if (authUser) {
+      // Already logged in — discard the invite token and continue normally
+      setPendingInvite(null);
+    } else {
+      return <AcceptInviteScreen token={pendingInvite} onDone={() => setPendingInvite(null)} />;
+    }
+  }
 
   // Guard: Loading auth state
   if (appLoading) return (
